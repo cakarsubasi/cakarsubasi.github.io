@@ -22,10 +22,10 @@ title: Cem Akarsubaşı's Personal Website
 email: cemakarsubasi@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   Just testing, please ignore.
-baseurl: "" # the subpath of your site, e.g. /blog
+baseurl: "/testbaseurl" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
-twitter_username: jekyllrb
-github_username:  jekyll
+#twitter_username:
+github_username:  cakarsubasi
 
 # Build settings
 theme: minima
