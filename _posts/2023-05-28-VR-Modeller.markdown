@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Computer Engineering Bachelor Thesis: 3D Modelling in Virtual Reality"
-date: 2023-05-27 15:37:00 +0300
+date: 2023-05-28 10:00:00 +0300
 author: "Cem Akarsubaşı"
 ---
 
