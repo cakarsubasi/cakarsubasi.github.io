@@ -18,7 +18,7 @@
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
 
-title: Cem Akarsubaşı's Personal Website
+title:  
 email: cemakarsubasi@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   Just testing, please ignore.
@@ -52,3 +52,4 @@ plugins:
 #   - vendor/cache/
 #   - vendor/gems/
 #   - vendor/ruby/
+#   - _posts/2023-05-27-welcome-to-jekyll.markdown
