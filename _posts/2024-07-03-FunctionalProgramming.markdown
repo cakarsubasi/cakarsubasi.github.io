@@ -3,6 +3,7 @@ layout: post
 title: "Functional Programming"
 date: 2024-07-03 10:00:00 +0300
 author: "Ark"
+permalink: "/functional-programming-1/"
 ---
 
 The most common ways to run F# code is either using Visual Studio or VS Code with the Ionide extension.  (There is also an Ionide plugin for vim)
@@ -271,10 +272,20 @@ listFold (+) 0 example // (+) has the type 't -> 't -> 't where 't has
 There are several more important adapters.
 
 ```fsharp
-// TODO
 // zip combines two collections, useful when you need to iterate over
 // multiple lists with the same number of elements at the same time
 List.zip // 'a list -> 'b list -> ('a * 'b) list
+// reduce is like fold but uses the first element of the list as the state
+List.reduce // ('a -> 'a -> 'a) -> 'a list -> 'a
+// map2 combines zip and map
+List.map2 // ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
+// collect takes a function that produces a list, and then flattens the lists
+List.collect // ('a -> 'b list) -> 'a list -> 'b list
+
+
+// where is for confused C# programmers
+// it is identical to filter
+List.where // ('a -> bool) -> 'a list -> 'a list
 ```
 
 Note that there are many more some of which are fairly advanced and specific.
@@ -290,17 +301,63 @@ let multiply = fun a b -> a * b // int -> int -> int
 The most common use case is with list adapters where you need to define a function but it is short enough and only used in one place that you don't want to have a separate definition of it.
 
 ```fsharp
-List.fold ()
+let lst = [(1, 2); (3, 4); (5, 6)]
+let flattenPairs = List.collect (fun (a, b) -> [a; b])
+// ('a * 'a) list -> 'a list
+flattenPairs lst // [1; 2; 3; 4; 5; 6]
 ```
 ### Chaining Adapters with |>
 
-Let's get to the part of why functional programming looks so weird to so many people.
-### Infinite Recursion
+Let's get to the part of why functional programming looks so weird to so many people. Let's say you want to zip two lists, take the larger of the two elements in each tuple, sort the remaining elements, and then do a running sum and return the list. It looks something like this.
 
-Lists use what is called "eager evaluation". What this means is when you do operation on lists, the entire list is in memory and operations are instantly applied. 
+```fsharp
+fst (List.mapFold (fun acc e -> (acc + e, acc + e)) 0.0 (List.sort (List.map (fun (a, b) -> if a > b then a else b) (List.zip lst1 lst2))))
+```
+
+If that looks completely unreadable, you're not the only one. Splitting operations to separate lines does not make things much better.
+```fsharp
+fst // fst takes the first element of a tuple
+    (List.mapFold 
+                (fun acc e -> (acc + e, acc + e)) 
+                0.0 
+                (List.sort 
+                    (List.map 
+                        (fun (a, b) -> if a > b then a else b) 
+                        (List.zip lst1 lst2))))
+```
+
+The problem is the first operation is actually on the last line, clearly what we need are intermediate products.
+
+```fsharp
+let lst = List.zip lst1 lst2
+let lst' = List.map (fun (a, b) -> if a > b then a else b) lst
+let lst'' = List.sort lst'
+let lst''' = List.mapFold (fun acc e -> (acc + e, acc + e)) 0.0 lst''
+let lst'''' = fst lst'''
+lst''''
+```
+
+This helps, but there is still a lot of garbage. Now, one thing you will notice is that the list is always the last argument to all of these functions which is not a coincidence. Enter the infix operator `|>`. The only thing it does is feed the value to its left to the function to its right.
+
+```fsharp
+List.zip lst1 lst2 
+// same as
+lst2 |> List.zip lst1
+```
+
+So the above code is equivalent to the below code.
+
+```fsharp
+List.zip lst1 lst2
+|> List.map (fun (a, b) -> if a > b then a else b)
+|> List.sort
+|> List.mapFold (fun acc e -> (acc + e, acc + e)) 0.0
+|> fst
+```
+
 ### Sum types
 
-Up to this point, we have only written functions. But to manage anything larger than the most basic programs, we need a way to aggregate data. F# being a fully fledged .NET language supports every type that you can create in C#. The most basic type definition is the type redefinition.
+Up to this point, we have only written functions. But to manage anything larger than the most basic programs, we need a way to aggregate data. F# being a fully fledged .NET language supports every type that you can create in C#, however the way types are used in idiomatic F# code can be quite different in F#. The most basic type definition is the type redefinition.
 
 ```fsharp
 type Handle = string
@@ -334,8 +391,8 @@ Now, if you said null, I presume you are still stuck with Java in 2024 (my condo
 
 ```fsharp
 type 'a Option =
-	| None
-	| Some of 'a 
+    | None
+    | Some of 'a 
 ```
 
 Thus our function becomes:
@@ -348,9 +405,7 @@ let rec findElem name (lst: 'a NamedElem list): Option 'a =
         | _ :: xs -> findElem name xs
 ```
 
-An Option is known as a sum type and one of many sum types defined by default in F#, they are essentially tagged unions in many languages but thanks to pattern matching and the type system, they are super powered. None and Some are fields in the type and are used to construct instances of it.
-
-
+An Option is known as a sum type and one of many sum types defined by default in F#, they are essentially tagged unions in many languages but thanks to pattern matching and the type system, they are super powerful. None and Some are fields in the type and are used to construct instances of it.
 
 
 ### That Monad thing
@@ -365,14 +420,14 @@ A monad is a type that defines a flatmap operation (also known as a bind). We do
 
 ```fsharp
 type 't Monad =
-	member (>>=): ('t -> 'u Monad) -> 't Monad -> 'u Monad
+    member (>>=): ('t -> 'u Monad) -> 't Monad -> 'u Monad
 ```
 
 ```fsharp
 let bind op result = // ('a -> 'b Result) -> 'a Result -> 'b Result
     match result with
-	    | Ok value -> op value
-	    | Error err -> Error err
+        | Ok value -> op value
+        | Error err -> Error err
 ```
 
 Was that so complicated?
