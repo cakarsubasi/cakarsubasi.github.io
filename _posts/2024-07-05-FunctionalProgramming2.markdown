@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Functional Programming"
-date: 2024-07-05 10:00:00 +0300
+date: 2024-07-05 7:00:00 +0300
 author: "Ark"
 permalink: "/functional-programming-2/"
 ---
@@ -9,7 +9,7 @@ permalink: "/functional-programming-2/"
 Inspired by the brilliant library that is FParsec as well as just seeing there being a page for parser combinators in F# for Fun and Profit, I may as well write my own.
 
 Let's start by discussing what the parsing problem is. Given a grammar, decide if a given input string is a valid sentence in the grammar (and if it is, return an abstract syntax tree representation of it). The parsing problem is undecidable in the most general case known as recursively enumerable grammars, but we won't be dealing with those today. It is pretty likely that you have run into a situation once or twice when you had to parse some arbitrary text file and ran into some issues.
- 
+
 ![[1920px-Chomsky-hierarchy.svg.png]]
 
 However, it doesn't have to be that way and I will illustrate that using JSON. JSON is pretty special because it combines two properties..
