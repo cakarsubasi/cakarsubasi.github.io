@@ -6,7 +6,7 @@ author: "Ark"
 permalink: "/functional-programming-1/"
 ---
 
-[Part 2]({% post_url 2024-07-05-FunctionalProgramming2 %})
+[Part 2]({% post_url /_posts/2024-07-05-FunctionalProgramming2 %})
 
 The most common ways to run F# code is either using Visual Studio or VS Code with the Ionide extension.  (There is also an Ionide plugin for vim)
 
