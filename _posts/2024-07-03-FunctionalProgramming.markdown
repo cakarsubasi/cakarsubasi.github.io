@@ -6,6 +6,8 @@ author: "Ark"
 permalink: "/functional-programming-1/"
 ---
 
+[Part 2]({% post_url 2024-07-05-FunctionalProgramming2 %})
+
 The most common ways to run F# code is either using Visual Studio or VS Code with the Ionide extension.  (There is also an Ionide plugin for vim)
 
 Install the .NET SDK and create a .fsx file
@@ -116,8 +118,8 @@ Although F# is perfectly capable of mutation, loops, and all the other fancy con
 ```fsharp
 let rec factorial x = // factorial: int -> int
     match x with
-        | 0 -> 1
-        | a -> a * factorial (a - 1)
+    | 0 -> 1
+    | a -> a * factorial (a - 1)
 
 factorial 5 // 120
 ```
@@ -130,9 +132,9 @@ This kind of one argument function that immediately matches is so common in F# t
 
 ```fsharp
 let rec factorial = // factorial: int -> int
-    function
-    | 0 -> 1
-    | x -> x * factorial (x - 1)
+    function
+    | 0 -> 1
+    | x -> x * factorial (x - 1)
 ```
 
 Those of you who are a bit astute are probably screaming that it's not in tail form.
@@ -198,9 +200,9 @@ Programmers are however lazy and do not want to create a new function all the ti
 
 ```fsharp
 let rec listMap op lst = // ('a -> 'b) -> 'a list -> 'b list
-    match lst with
-    | [] -> []
-    | x :: xs -> op x :: listMap op xs
+    match lst with
+    | [] -> []
+    | x :: xs -> op x :: listMap op xs
 
 let factorialOfList = listMap factorial // int list -> int list
 ```
@@ -220,10 +222,10 @@ There are two more important operations we need to know about. In imperative pro
 ```csharp
 foreach (var x in ...) 
 {
-	if (cond(x)) 
-	{
-		...
-	}
+    if (cond(x)) 
+    {
+        ...
+    }
 }
 ```
 
@@ -249,7 +251,7 @@ The final and most difficult to understand fundamental operation is the fold. A 
 ```csharp
 var acc = ...
 foreach (var x in ...) {
-	acc = folder(acc, x);
+    acc = folder(acc, x);
 }
 return acc;
 ```
@@ -381,10 +383,10 @@ In many problems that we model, it is fairly common that there are several "shap
 
 ```fsharp
 let rec findElem name (lst: 'a NamedElem list): 'a =
-    match lst with
-        | [] -> ??? // what to do here
-        | (x, value) :: _ when x = name -> value
-        | _ :: xs -> findElem name xs
+    match lst with
+    | [] -> ??? // what to do here
+    | (x, value) :: _ when x = name -> value
+    | _ :: xs -> findElem name xs
 ```
 
 Now, if you said null, I presume you are still stuck with Java in 2024 (my condolences). Throwing an exception is an option if you are generally not expecting this function to ever fail (thus making a failure exceptional). But F# offers a better solution.
@@ -399,10 +401,10 @@ Thus our function becomes:
 
 ```fsharp
 let rec findElem name (lst: 'a NamedElem list): Option 'a =
-    match lst with
-        | [] -> None
-        | (x, value) :: _ when x = name -> Some value
-        | _ :: xs -> findElem name xs
+    match lst with
+    | [] -> None
+    | (x, value) :: _ when x = name -> Some value
+    | _ :: xs -> findElem name xs
 ```
 
 An Option is known as a sum type and one of many sum types defined by default in F#, they are essentially tagged unions in many languages but thanks to pattern matching and the type system, they are super powerful. None and Some are fields in the type and are used to construct instances of it.
