@@ -1,10 +1,16 @@
 ---
 layout: post
-title: "Functional Programming"
+title: "Functional Programming 2"
 date: 2024-07-05 7:00:00 +0300
 author: "Ark"
 permalink: "/functional-programming-2/"
 ---
+
+This is part 2 of the functional programming series illustrating an example library and application.
+
+[Part 1]({% post_url /_posts/2024-07-03-FunctionalProgramming %})
+
+Part 2
 
 Inspired by the brilliant library that is FParsec as well as just seeing there being a page for parser combinators in F# for Fun and Profit, I may as well write my own.
 
@@ -29,7 +35,7 @@ To solve the parsing problem, powerful tools such as Lex and Yacc were created. 
 Let's say that we want to parse a single char, we might consider writing something like this
 
 ```fsharp
-parseChar: char -> string -> Result<char * string, Errors> 
+parseChar: char -> string -> Result<char * string, Errors>
 ```
 
 We take the character we are looking for as input, as well as the input string. If we match the character, we return the character and a new string with the character removed. We can wrap the part that will be common in all parsers into its own type.
@@ -72,12 +78,13 @@ let pstring (s: string) = // string -> string Parser
         else
             let actual = input.[0..s.Length-1]
             let remaining = input.[input.Length..]
-            Error 
+            Error
 	            [$"pstring: Expected {s}\n got {actual} \n remaining: {remaining}"]
     Parser parse
 ```
 
-Now, the only other thing we need is a way to combine parsers. But we will get there in a bit. 
+Now, the only other thing we need is a way to combine parsers. But we will get there in a bit.
+
 ### Parsing JSON
 
 ```fsharp
@@ -115,8 +122,8 @@ We can do that with the following function.
 let wrap constructor parser = // ('a -> 'b) -> 'a Parser -> 'b Parser
     let wrap' input =
         match parser with Parser func -> func input
-        |> Result.bind 
-	        (fun (parsed, remaining) -> Ok (constructor parsed, remaining)) 
+        |> Result.bind
+	        (fun (parsed, remaining) -> Ok (constructor parsed, remaining))
     Parser wrap'
 ```
 
@@ -132,25 +139,361 @@ There is one more problem. All values in the JSON standard are allowed to be fol
 
 ```fsharp
 // Combinator.fs
-let pspaces =
+let pspaces = // () Parser
     let parse (input: string) =
         let remaining = input.TrimStart()
         Ok ((), remaining)
     Parser parse
 ```
 
-Parsing whitespace cannot fail.
+Parsing whitespace cannot fail for our case, so we unconditionally return Ok.
+
+Now we need to write a function to do the combination. The and operator runs both parsers in succession
 
 ```fsharp
 // Combinator.fs
 let parserAnd p1 p2 = // 'a Parser -> 'b Parser -> ('a * 'b) Parser
     let parse input =
-        let result = pget p1 input 
+        let result = pget p1 input
         match result with
-            Ok (value, remaining) -> 
-                match pget p2 remaining with 
+            Ok (value, remaining) ->
+                match pget p2 remaining with
                     | Ok (value2, remaining2) -> Ok ((value, value2), remaining2)
                     | Error err -> Error err
             | Error err -> Error err
     Parser parse
 ```
+
+This combinator takes two parsers, and returns a parser that succeeds if both parsers succeed and returns their output as a tuple. Now, we can properly parse null.
+
+One problem you'll notice is that the behavior of `parserAnd` is confusing when used alongside the pipe operator |>.
+
+```fsharp
+pA |> parserAnd pB // applies pB first, then pA
+```
+
+In addition, a lot of the times when we subsequently apply parsers, we are only interested in the result of one of them. Now, there's a really neat way of solving both of these problems in a very clean way, but let's just define a few helper functions first and move on.
+
+```fsharp
+// Combinator.fs
+let parserAnd2 p2 p1 = parserAnd p1 p2
+
+let pfst p = // ('a * 'b) parser -> 'a Parser
+    let parse input =
+        match pget p input with
+            | Ok ((a, b), remaining) -> Ok(a, remaining)
+            | Error err -> Error err
+    Parser parse
+
+let psnd p = // ('a * 'b) parser -> 'b Parser
+    let parse input =
+        match pget p input with
+            | Ok ((a, b), remaining) -> Ok(b, remaining)
+            | Error err -> Error err
+    Parser parse
+```
+
+```fsharp
+// JSON.fs
+let parseNull = // JValue Parser
+    parserAnd (pstring "null") pspaces |> wrap (fun _ -> JNull)
+```
+
+Next, let's parse booleans. With booleans, we have two potential states, "true" and "false"
+
+```fsharp
+// JSON.fs
+let parseBool = // JValue Parser
+    parseTrue = pstring "true" |> parserAnd2 pspaces |> wrap (fun _ -> JBool true)
+    |> parserOr <|
+    (pstring "false" |> parserAnd2 pspaces |> wrap (fun _ -> JBool false))
+```
+
+You will notice the somewhat lesser used brother of the forward pipe operator |>, the reverse pipe operator <|. It's fairly vestigial in this case but allows messing with the order of arguments a bit. The first line becomes the first argument to parserOr and the bottommost line becomes the second, the parantheses are required.
+
+### Infix operators using static members
+
+The concept of an operator is a bit difficult to explain in mathematics (mainly in the sense of how an operator is different from a function) but pretty much all of you should be familiar with the topic of operator precedence. When we do math, powers have precedence over multiplication and division, and those have precedence over addition and subtraction.
+
+\[2 + 4 * 3]\
+
+This is known as infix notation. Programming languages mostly respect this convention, including F#. The problem is programming languages typically have far more operators to worry about. There's of course equality and inequality which are not operators in mathematics but are operators producing truth values in most programming languages, bitwise operators, and pretty much every language has at least one or two very unique operators.
+
+Now, most people only have so much working memory and mentally parsing huge expressions is often difficult so parantheses are used to make everything clear (even if they may not be strictly necessary)
+
+
+Infix operators must be defined as static members of a type. One limitation of F# is that you cannot reference names defined after some point and our combinator functions rely on our type. However, what we can do is define extensions to existing types.
+
+I will steal the operator names from FParsec (in case you wish to try that library).
+
+```fsharp
+// Combinator.fs
+type 'a Parser = Parser of (string -> Result<'a * string, ParsingError>)
+// ...
+// definitions for parserAnd, parserOr, pfst, psnd etc...
+// ...
+type 'a Parser with
+    /// first apply the parser to the left, then apply the parser to the right
+    /// return the result of both parsers in a tuple
+    static member (.>>.) (p1, p2) =
+        parserAnd p1 p2
+
+    /// first apply the parser to the left, then apply the parser to the right
+    /// return the result of the left parser
+    static member (.>>) (p1, p2) =
+        parserAnd p1 p2 |> pfst
+
+    /// first apply the parser to the left, then apply the parser to the right
+    /// return the result of the right parser
+    static member (>>.) (p1, p2) =
+        parserAnd p1 p2 |> psnd
+
+    /// first apply the parser to the left, if it fails, apply the parser to the right
+    static member (<|>) (p1, p2) =
+        parserOr p1 p2
+```
+
+This allows very terse yet unambiguous chaining of operations.
+
+### Conditional Parsing
+
+Next up are strings. Now, strings do have some subtle lexical details we need to worry about if you want to write a fully compliant JSON parser, but we will ignore them for now. A string starts with a quotation mark, is followed by any unicode codepoint except for a backslash, quote or control characters. We'll pretend the escape sequences don't exist (you can consider it a challenge to write a parser covering them).
+
+First for a single char.
+
+```fsharp
+// Combinator.fs
+let pcond cond = // (char -> bool) -> char Parser
+    let parse (input: string) =
+        if input.Length = 0 then
+            Error ["Unexpected end of sequence"]
+        else if cond input.[0] then
+            Ok(input.[0], input.[1..])
+        else
+            Error [ $"Unexpected \"{input.[0]}\"" ]
+    Parser parse
+```
+
+However, this one is not too useful, we need essentially a takeWhile version of this which is the following.
+
+```fsharp
+// Combinator.fs
+let pcondWhile cond = // (char -> bool) -> string Parser
+    let parse (input: string) =
+        let matched = 
+            input.ToCharArray() 
+            |> Array.takeWhile cond 
+            |> Array.map string 
+            |> String.concat "" 
+
+        if matched.Length > 0 then
+            Ok (matched, input.[matched.Length..])
+        else
+            Error [$"Matched no characters"]
+    Parser parse
+```
+
+And now we can write our parseString function.
+
+```fsharp
+// JSON.fs
+let parseString =
+    let cond c =
+        not (Char.IsControl(c) || c = '\"')
+    let psep = pchar '\"'
+
+    psep >>. (pcondWhile cond) .>> psep .>> pspaces
+    |> wrap (fun str -> JString str)
+```
+
+### Top level and parsing arrays
+
+The remaining things to write are arrays and objects as well as the top level parsers. We'll write the top level parsers first since they don't do any new things.
+
+```fsharp
+// JSON.fs
+let parseValue = // JValue Parser
+    parseNull
+    <|> parseBool
+    <|> parseString
+    <|> parseArray  // TODO
+    <|> parseObject // TODO
+
+let public parseJson = // Json Parser
+    pspaces >>. parseValue
+    |> wrap (fun jvalue -> Json jvalue)
+```
+
+We need to first apply pspaces since JSON can have arbitrary whitespace at the beginning.
+
+We'll do array before object since it is simpler. It is often the case that we have to parse grammars of the following form:
+
+```
+elements ::= ∅
+          |  element "," elements
+```
+
+That's exactly what a JSON array is (minus the required square brackets). First we need a zero or more parser. We'll also write a simple utility function which we'll use for the brackets.
+
+Since there is no limit on recursion depth, pmany has to use only tail calls.
+
+```fsharp
+// Combinator.fs
+
+// parse 0 or more with pvalue separated by psep
+let pmany (psep: Parser<'a>) (pvalue: Parser<'b>): Parser<'b list> =
+    let rec pmany' input lst =
+        match pget pvalue input with
+            | Ok (inside, remaining) -> 
+                match pget psep remaining with
+                    | Error _ -> inside :: lst, remaining 
+                    | Ok (_, remaining) ->
+                        pmany' remaining (inside :: lst)                 
+            | Error _ -> [], input
+    let parse input =
+        let (lstrev, remaining) = pmany' input []
+        Ok (List.rev lstrev, remaining)
+    Parser parse
+
+let pbetween (pleft: 'dc1 Parser) (pright: 'dc2 Parser) (pcenter: 'a Parser) =
+    pleft >>. pcenter .>> pright
+```
+
+With these, it is really easy to define the parseArray function.
+
+```fsharp
+// JSON.fs
+let parseArray = // JValue Parser
+    let pleft = pchar '[' >>. pspaces
+    let pright = pchar ']' >>. pspaces
+    let psep = pchar ',' >>. pspaces
+    pbetween pleft pright (pmany psep parseValue)
+    |> wrap (fun pvalues -> JArray pvalues)
+```
+
+And parseObject is only a slightly more complicated version of this.
+
+```fsharp
+let parseObject' =
+    let pleft  = pchar '{' >>. pspaces
+    let pright = pchar '}' >>. pspaces
+    let psep   = pchar ',' >>. pspaces
+    let psep2  = pchar ':' >>. pspaces
+
+    let pkey = parseString |> wrap (fun elem -> match elem with JString str -> str | _ -> failwith "parseObject: typeError")
+
+    let pkeyvalue = pkey .>> psep2 .>>. parseValue
+
+    pbetween pleft pright (pmany psep pkeyvalue)
+
+    |> wrap (fun pvalues -> JObject (Map.ofList pvalues))
+```
+
+However, we have a bit of a problem. 
+
+```fsharp
+let parseValue =
+    // ...
+    parseArray // parse array is not defined
+
+let parseArray =
+    // ...
+    parseValue
+```
+
+Using the and keyword does not solve this.
+
+```fsharp
+let parseValue = // parseValue evaluates parseArray
+    // ...
+    parseArray
+
+and parseArray = // parseArray evaluates parseValue
+    // ...
+    parseValue
+```
+
+Since F# allows recursive function definitions to be recursive, but not values. We need a form of indirection to make this work.
+
+### Recursive definitions and RefCell
+
+I will use more or less the same solution that FParsec uses for our problem since this gives us a good opportunity to talk about reference cells and mutation.
+
+A reference cell is a mutable location in memory. In F#, when you pass values to a function, that value will not change when you next use it even if it is marked as mutable. A reference cell opts out of that guarantee and allows arbitrary mutation. This somehow [sounds familiar](https://doc.rust-lang.org/stable/std/cell/index.html).
+
+Reference cells are unwieldly to use and can make it very difficult to reason what your code does, so it is best to use them sparingly. Lazy initialization is one area where we need them.
+
+Reference cells are created with the ref function and can be read from by accessing the Value field. 
+
+```fsharp
+let a = ref 0
+
+let printa () =
+    printfn "%d" a.Value
+
+printa () // 0
+
+a.Value <- 42
+
+printa () // 42
+```
+
+With this knowledge, we create the following function. ForwardDeclare takes no arguments and returns two values. First, a reference cell that initially contains a dummy parser that crashes. And a second parser that just calls passes its input to the parser inside the reference cell.
+
+```fsharp
+// Combinator.fs
+let forwardDeclare () = // unit -> ref<Parser<'a>> * Parser<'a>
+    let pfail = Parser (fun _ -> failwith "This parser always fails")
+    let pref = ref pfail
+    let pforward = Parser (fun input -> prun (pref.Value) input) 
+    pref, pforward
+```
+
+This function is overloaded on its output values only and F# is able to deduce the types of the outputs based on their later usage.
+
+```fsharp
+// JSON.fs
+let pobjectref, parseObject  = forwardDeclare()
+let parrayref, parseArray = forwardDeclare()
+
+let parseValue =
+    // ...
+    <|> parseArray
+    <|> parseObject // no longer depends on the later values
+
+let parseObjectActual =
+    // ...
+pobjectref.Value <- parseObjectActual
+
+let parseArrayActual =
+    // ...
+parrayref.Value <- parseArrayActual
+```
+
+And that's it.
+
+### Challenge: Parse JSON Numbers
+
+Hint: Parse the number as text and use the built in Double.Parse in the standard library. Note that parsing floats is locale sensitive in .NET so you will need to use the following form.
+
+```fsharp
+let culture = Globalization.CultureInfo.InvariantCulture
+let toFloat = (fun (str: string) -> Double.Parse(str, culture) |> JNumber)
+```
+
+Hint: Consider writing an additional parser combinator for regex.
+
+```fsharp
+let pregex regex = // string -> string Parser
+    // ...
+```
+
+Alternatively, you can try parsing it using only parser adapter chains.
+
+### Notes on the implementation
+
+For simplicity, I've represented the parser state purely using `string` but in practice, you most likely want to store line and column information as well (for better error messages) or even go one step further and add an explicit generic type parameter for the parser state like FParsec did so library consumers can pass state around more easily.
+
+Additionally, string is not the most efficient type to represent the state of the input stream because they are always in memory, and each operation on a string creates a new string (even though we never modify the strings). Passing around slices and a single string would be significantly faster and have much lower GC pressure especially on much more complicated grammars on big files.
+
+Error handling has also been an afterthought in this implementation with us simply adding up a bunch of non machine readable strings side by side.

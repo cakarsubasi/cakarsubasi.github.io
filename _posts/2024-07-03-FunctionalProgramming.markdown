@@ -1,10 +1,14 @@
 ---
 layout: post
-title: "Functional Programming"
+title: "Functional Programming 1"
 date: 2024-07-03 10:00:00 +0300
 author: "Ark"
 permalink: "/functional-programming-1/"
 ---
+
+This is the first part of the functional programming series, covering some fundamentals of F#, without getting caught up too much. 
+
+Part 1
 
 [Part 2]({% post_url /_posts/2024-07-05-FunctionalProgramming2 %})
 
